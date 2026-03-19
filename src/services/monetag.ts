@@ -1,36 +1,41 @@
 /**
- * Monetag Ads Helper - نسخة محسنة مع معالجة الأخطاء
+ * Monetag Ads Helper - Multi-zone support
  */
 
 import { RetryManager } from '../utils/retryManager';
 
 export const MonetagService = {
   isLoaded: false,
-  loadPromise: null as Promise<boolean> | null,
+  loadedZones: new Set<string>(),
 
-  // تحميل آمن لخدمة Monetag مع إعادة المحاولة
-  async loadScript(zoneId?: string): Promise<boolean> {
-    if (this.isLoaded) {
-      return true;
+  // Load multiple ad zones
+  async loadAllZones(): Promise<boolean> {
+    const zones = [
+      { id: '10748607', name: 'Vignette Banner' },
+      { id: '10748606', name: 'In-Page Push' },
+      { id: '10748605', name: 'OnClick Popunder' },
+    ];
+
+    let anyLoaded = false;
+    for (const zone of zones) {
+      try {
+        await this.loadSingleZone(zone.id, zone.name);
+        anyLoaded = true;
+      } catch (e) {
+        console.warn(`Failed to load ${zone.name} (${zone.id}):`, e);
+      }
     }
 
-    if (this.loadPromise) {
-      return this.loadPromise;
-    }
-
-    this.loadPromise = this.attemptScriptLoad(zoneId);
-    return this.loadPromise;
+    this.isLoaded = anyLoaded;
+    return anyLoaded;
   },
 
-  // محاولة تحميل النص البرمجي مع إعادة المحاولة
-  async attemptScriptLoad(zoneId?: string): Promise<boolean> {
-    const finalZoneId = zoneId || '10748605';
+  // Load a single zone script
+  async loadSingleZone(zoneId: string, zoneName: string = 'ad'): Promise<boolean> {
+    const scriptId = `monetag-script-${zoneId}`;
     
-    if (!finalZoneId) return false;
-    
-    // منع التكرار
-    if (document.getElementById('monetag-script')) {
-      MonetagService.isLoaded = true;
+    if (document.getElementById(scriptId)) {
+      this.loadedZones.add(zoneId);
       return true;
     }
 
@@ -39,28 +44,26 @@ export const MonetagService = {
         async () => {
           return new Promise((resolve, reject) => {
             const script = document.createElement('script');
-            script.id = 'monetag-script';
-            script.src = `https://5gvci.com/act/files/tag.min.js?z=${finalZoneId}`;
+            script.id = scriptId;
+            script.src = `https://5gvci.com/act/files/tag.min.js?z=${zoneId}`;
             script.async = true;
             script.dataset.cfasync = "false";
-            script.dataset.zone = finalZoneId;
+            script.dataset.zone = zoneId;
             
             script.onload = () => {
-              console.log(`Monetag Zone ${finalZoneId} loaded successfully`);
+              console.log(`Monetag ${zoneName} (${zoneId}) loaded successfully`);
               resolve(true);
             };
             
             script.onerror = (error) => {
-              console.warn(`Failed to load Monetag script:`, error);
-              reject(new Error('فشل تحميل Monetag'));
+              console.warn(`Failed to load Monetag ${zoneName}:`, error);
+              reject(new Error(`Failed to load Monetag ${zoneName}`));
             };
             
-            // إضافة مهلة للتحميل
             setTimeout(() => {
-              reject(new Error('انتهت مهلة تحميل Monetag'));
+              reject(new Error(`Timeout loading Monetag ${zoneName}`));
             }, 8000);
             
-            // Insert at the top of head for better performance
             if (document.head.firstChild) {
               document.head.insertBefore(script, document.head.firstChild);
             } else {
@@ -72,36 +75,40 @@ export const MonetagService = {
         10000
       );
 
-      MonetagService.isLoaded = true;
+      this.loadedZones.add(zoneId);
       return true;
     } catch (error) {
-      console.warn('فشل تحميل Monetag بعد عدة محاولات:', error);
-      MonetagService.isLoaded = false;
+      console.warn(`Failed to load Monetag ${zoneName} after retries:`, error);
       return false;
     }
   },
 
-  // حقن كود Monetag في الموقع (الطريقة القديمة للتوافق)
+  // Legacy compatibility - load a single script
+  async loadScript(zoneId?: string): Promise<boolean> {
+    return this.loadAllZones();
+  },
+
+  // Legacy compatibility
   injectScript: async (zoneId?: string) => {
     try {
-      await MonetagService.loadScript(zoneId);
+      await MonetagService.loadAllZones();
     } catch (error) {
-      console.warn('فشل حقن Monetag:', error);
+      console.warn('Failed to inject Monetag:', error);
     }
   },
 
-  // إزالة الكود إذا لزم الأمر
+  // Remove all scripts
   removeScript: () => {
-    const script = document.getElementById('monetag-script');
-    if (script) {
-      script.remove();
-      MonetagService.isLoaded = false;
-      MonetagService.loadPromise = null;
-    }
+    MonetagService.loadedZones.forEach(zoneId => {
+      const script = document.getElementById(`monetag-script-${zoneId}`);
+      if (script) script.remove();
+    });
+    MonetagService.loadedZones.clear();
+    MonetagService.isLoaded = false;
   },
 
-  // التحقق مما إذا كانت الخدمة متاحة
+  // Check if service is available
   isAvailable: (): boolean => {
-    return MonetagService.isLoaded && document.getElementById('monetag-script') !== null;
+    return MonetagService.isLoaded && MonetagService.loadedZones.size > 0;
   }
 };
