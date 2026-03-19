@@ -25,13 +25,15 @@ export async function callAI(
   }));
 
   try {
-    const res = await fetch(`${baseUrl}/v1/chat/completions`, {
+    // Use our Vercel proxy to avoid CORS issues
+    const res = await fetch('/api/ai', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${apiKey}`
       },
       body: JSON.stringify({
+        baseUrl: baseUrl,
         model: model,
         messages: formattedMessages,
         max_tokens: 2048,
@@ -97,7 +99,7 @@ export async function callAI(
   } catch (error: any) {
     console.error("AI Error:", error);
     if (error.message.includes('Failed to fetch')) {
-      throw new Error(`CORS or Network Error. The API at ${baseUrl} might be blocking requests from the browser. Try using a CORS proxy or check your network.`);
+      throw new Error(`Network Error. Please check your internet connection.`);
     }
     throw new Error(`Failed to communicate with AI: ${error.message}`);
   }
