@@ -27,7 +27,7 @@ export default function Login() {
   const [copied, setCopied] = useState(false);
   const [showInstructions, setShowInstructions] = useState(false);
 
-  const appUrl = 'https://learn-bot.vercel.app';
+  const appUrl = 'https://ru-learn-bot.vercel.app';
 
   useEffect(() => {
     const webview = isWebView();
