@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "407502960706",
+    "project_id": "n8n360-8ba3b",
+    "storage_bucket": "n8n360-8ba3b.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:407502960706:android:cc0380c68ad10a8c6cd5db",
+        "android_client_info": {
+          "package_name": "com.rulearn.bot"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "407502960706-4k9vfetgr95b9p594lig96mcbt5dhdh6.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCS8Dsuzv1U1lDPc7VS_Du5yVliD_Rd9GU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "407502960706-4k9vfetgr95b9p594lig96mcbt5dhdh6.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

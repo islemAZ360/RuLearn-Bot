@@ -9,7 +9,6 @@ import { onAuthStateChanged, signOut, User, getRedirectResult } from 'firebase/a
 import { enhancedFirebase } from './services/enhancedFirebase';
 import { MonetagService } from './services/monetag';
 import { NetworkDetector } from './utils/networkDetector';
-import { AppCreator24Handler } from './utils/appCreator24Handler';
 import { APP_CONFIG, getErrorMessage, requiresVPN } from './config/appConfig';
 import BotDashboard from './components/BotDashboard';
 import WebChat from './components/WebChat';
@@ -28,19 +27,6 @@ export default function App() {
   const [appReady, setAppReady] = useState(false);
 
   const isAdmin = user?.email === OWNER_EMAIL;
-
-  // تهيئة معالج appCreator24
-  useEffect(() => {
-    if (AppCreator24Handler.isAppCreator24Environment()) {
-      AppCreator24Handler.getInstance().initialize();
-      console.log('تم تهيئة معالج appCreator24');
-      
-      // إزالة فئة التحميل بعد 5 ثوانٍ
-      setTimeout(() => {
-        document.body.classList.remove('loading-startup');
-      }, 5000);
-    }
-  }, []);
 
   const handleLoadingComplete = async () => {
     try {
