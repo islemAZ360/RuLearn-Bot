@@ -4,22 +4,46 @@ import { getFirestore } from 'firebase-admin/firestore';
 
 // Initialize Firebase Admin (for server-side)
 if (!getApps().length) {
-  // Use environment variable for service account or default credentials
-  const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT 
-    ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)
-    : undefined;
+  try {
+    // Use environment variable for service account or default credentials
+    const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT 
+      ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)
+      : undefined;
 
-  initializeApp(serviceAccount ? {
-    credential: cert(serviceAccount)
-  } : {
-    projectId: 'n8n360-8ba3b'
-  });
+    if (serviceAccount) {
+      initializeApp({
+        credential: cert(serviceAccount),
+        projectId: serviceAccount.project_id || 'n8n360-8ba3b'
+      });
+    } else {
+      // Fallback to application default credentials
+      initializeApp({
+        projectId: 'n8n360-8ba3b'
+      });
+    }
+    console.log('Firebase Admin initialized successfully');
+  } catch (error) {
+    console.error('Failed to initialize Firebase Admin:', error);
+    throw error;
+  }
 }
 
 const db = getFirestore();
 
 // Pending saves storage (in-memory, per request)
 const pendingSaves: Record<string, { type: 'verbs' | 'words', items: {ru: string, ar: string}[] }> = {};
+
+// Helper function to save data with proper error handling
+async function saveToCollection(collectionName: string, data: any) {
+  try {
+    const ref = db.collection(collectionName).doc();
+    await ref.set(data);
+    return ref.id;
+  } catch (error: any) {
+    console.error(`Error saving to ${collectionName}:`, error);
+    throw error;
+  }
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Handle GET request - return webhook status
@@ -69,6 +93,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const config = configSnap.data() as any;
     const botToken = config.botToken;
     const userId = config.userId;
+
+    if (!botToken || !userId) {
+      console.error('Invalid config data:', { botToken: !!botToken, userId: !!userId });
+      return res.status(200).json({ ok: true });
+    }
 
     // Update chatId if different (user might message from different chat)
     if (config.chatId !== chatId.toString()) {
@@ -140,42 +169,57 @@ Here is how I can help you:
 
     // Show saved sentences
     if (text === 'all') {
-      const q = db.collection('sentences').where('userId', '==', userId).orderBy('timestamp', 'desc').limit(20);
-      const docs = await q.get();
-      if (docs.empty) {
-        await sendMsg('No sentences saved yet.');
-      } else {
-        const items = docs.docs.map(d => d.data());
-        const reply = items.map(i => `${i.ru}\n${i.ar}`).join('\n\n');
-        await sendMsg(`**Saved Sentences:**\n\n${reply}`.substring(0, 4000));
+      try {
+        const q = db.collection('sentences').where('userId', '==', userId).orderBy('timestamp', 'desc').limit(20);
+        const docs = await q.get();
+        if (docs.empty) {
+          await sendMsg('No sentences saved yet.');
+        } else {
+          const items = docs.docs.map(d => d.data());
+          const reply = items.map(i => `${i.ru}\n${i.ar}`).join('\n\n');
+          await sendMsg(`**Saved Sentences:**\n\n${reply}`.substring(0, 4000));
+        }
+      } catch (e: any) {
+        console.error('Error fetching sentences:', e);
+        await sendMsg('Failed to fetch sentences.');
       }
       return res.status(200).json({ ok: true });
     }
 
     // Show saved verbs
     if (text === 'verbs') {
-      const q = db.collection('verbs').where('userId', '==', userId).orderBy('timestamp', 'desc').limit(50);
-      const docs = await q.get();
-      if (docs.empty) {
-        await sendMsg('No verbs saved yet.');
-      } else {
-        const items = docs.docs.map(d => d.data());
-        const reply = items.map(i => `${i.ru} - ${i.ar}`).join('\n');
-        await sendMsg(`**Saved Verbs:**\n\n${reply}`.substring(0, 4000));
+      try {
+        const q = db.collection('verbs').where('userId', '==', userId).orderBy('timestamp', 'desc').limit(50);
+        const docs = await q.get();
+        if (docs.empty) {
+          await sendMsg('No verbs saved yet.');
+        } else {
+          const items = docs.docs.map(d => d.data());
+          const reply = items.map(i => `${i.ru} - ${i.ar}`).join('\n');
+          await sendMsg(`**Saved Verbs:**\n\n${reply}`.substring(0, 4000));
+        }
+      } catch (e: any) {
+        console.error('Error fetching verbs:', e);
+        await sendMsg('Failed to fetch verbs.');
       }
       return res.status(200).json({ ok: true });
     }
 
     // Show saved words
     if (text === 'words') {
-      const q = db.collection('words').where('userId', '==', userId).orderBy('timestamp', 'desc').limit(50);
-      const docs = await q.get();
-      if (docs.empty) {
-        await sendMsg('No words saved yet.');
-      } else {
-        const items = docs.docs.map(d => d.data());
-        const reply = items.map(i => `${i.ru} - ${i.ar}`).join('\n');
-        await sendMsg(`**Saved Words:**\n\n${reply}`.substring(0, 4000));
+      try {
+        const q = db.collection('words').where('userId', '==', userId).orderBy('timestamp', 'desc').limit(50);
+        const docs = await q.get();
+        if (docs.empty) {
+          await sendMsg('No words saved yet.');
+        } else {
+          const items = docs.docs.map(d => d.data());
+          const reply = items.map(i => `${i.ru} - ${i.ar}`).join('\n');
+          await sendMsg(`**Saved Words:**\n\n${reply}`.substring(0, 4000));
+        }
+      } catch (e: any) {
+        console.error('Error fetching words:', e);
+        await sendMsg('Failed to fetch words.');
       }
       return res.status(200).json({ ok: true });
     }
@@ -185,19 +229,23 @@ Here is how I can help you:
       const pendingKey = `${chatId}`;
       const pending = pendingSaves[pendingKey];
       if (pending) {
-        const batch = db.batch();
-        for (const item of pending.items) {
-          const ref = db.collection(pending.type).doc();
-          batch.set(ref, {
-            ru: item.ru,
-            ar: item.ar,
-            timestamp: Date.now(),
-            userId
-          });
+        try {
+          let savedCount = 0;
+          for (const item of pending.items) {
+            await saveToCollection(pending.type, {
+              ru: item.ru,
+              ar: item.ar,
+              timestamp: Date.now(),
+              userId
+            });
+            savedCount++;
+          }
+          await sendMsg(`Saved ${savedCount} ${pending.type} to database! ✅`);
+          delete pendingSaves[pendingKey];
+        } catch (e: any) {
+          console.error('Batch save error:', e);
+          await sendMsg('Failed to save items. Please try again.');
         }
-        await batch.commit();
-        await sendMsg(`Saved ${pending.items.length} ${pending.type} to database! ✅`);
-        delete pendingSaves[pendingKey];
       } else {
         await sendMsg('Nothing to save. Extract verbs or words first.');
       }
@@ -244,14 +292,15 @@ Here is how I can help you:
       const prompt = `Translate the following text to ${targetLang}. Return ONLY the ${targetLang} translation, nothing else.\n\nText: ${ruText}`;
       try {
         const translation = await callAI(prompt);
-        await db.collection('sentences').add({
+        await saveToCollection('sentences', {
           ru: ruText,
           ar: translation.trim(),
           timestamp: Date.now(),
           userId
         });
         await sendMsg(`**Translation (${targetLang}):**\n${translation.trim()}\n\n*Saved to database! ✅*`);
-      } catch (e) {
+      } catch (e: any) {
+        console.error('Translation error:', e);
         await sendMsg('Translation failed.');
       }
       return res.status(200).json({ ok: true });

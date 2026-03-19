@@ -32,6 +32,11 @@ service cloud.firestore {
     // Collection Rules
     // ===============================================================
 
+    // Bot configs - allow server-side admin access
+    match /botConfigs/{docId} {
+      allow read, write: if true; // Allow webhook to access
+    }
+
     match /sentences/{docId} {
       allow read, delete: if isOwner(resource.data.userId) || isAdmin();
       allow create: if isAuthenticated() && isValidEntry(request.resource.data);
