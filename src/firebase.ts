@@ -4,8 +4,7 @@ import { getAuth, GoogleAuthProvider } from "firebase/auth";
 
 const firebaseConfig = {
   apiKey: "AIzaSyD6LyoG8UhLN9ovjc0WGVWIPNHZkYEkFcg",
-  // Use Vercel domain for better WebView compatibility
-  authDomain: "ru-learn-bot.vercel.app",
+  authDomain: "n8n360-8ba3b.firebaseapp.com",
   projectId: "n8n360-8ba3b",
   storageBucket: "n8n360-8ba3b.firebasestorage.app",
   messagingSenderId: "407502960706",
