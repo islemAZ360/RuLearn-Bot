@@ -1,40 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { signInWithPopup } from 'firebase/auth';
 import { auth, googleProvider } from '../firebase';
-import { Bot, Sparkles, Loader2, ExternalLink } from 'lucide-react';
+import { Bot, Sparkles, Loader2, ExternalLink, Copy, Check } from 'lucide-react';
 
 // Detect if running in WebView/in-app browser
 function isWebView(): boolean {
-  const userAgent = navigator.userAgent || navigator.vendor || (window as any).opera || '';
+  const ua = navigator.userAgent || '';
   
-  // Check for common WebView indicators
-  const webviewIndicators = [
-    'FBAN', 'FBAV', // Facebook
-    'Instagram',
-    'Twitter',
-    'TelegramBot', 'Telegram', // Telegram
-    'Line',
-    'KAKAOTALK',
-    'Snapchat',
-    'WebView',
-    'wv', // Android WebView
-  ];
-  
-  for (const indicator of webviewIndicators) {
-    if (userAgent.includes(indicator)) {
-      return true;
-    }
-  }
-  
-  // Check for iOS WebView
-  const isIOS = /iPad|iPhone|iPod/.test(userAgent);
-  const isSafari = /Safari/.test(userAgent);
-  if (isIOS && !isSafari) {
+  // Common WebView indicators
+  if (/FBAN|FBAV|Instagram|Twitter|Telegram|Line|KAKAOTALK|Snapchat|WebView|wv/i.test(ua)) {
     return true;
   }
   
-  // Check if standalone (PWA) or has no window.open support
-  if ((window as any).navigator.standalone) {
+  // iOS WebView (not Safari)
+  if (/iPad|iPhone|iPod/.test(ua) && !/Safari/.test(ua)) {
     return true;
   }
   
@@ -45,17 +24,44 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [inWebView, setInWebView] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [showInstructions, setShowInstructions] = useState(false);
+
+  const appUrl = 'https://learn-bot.vercel.app';
 
   useEffect(() => {
     setInWebView(isWebView());
   }, []);
 
+  const handleCopyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(appUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Fallback for older browsers
+      const textArea = document.createElement('textarea');
+      textArea.value = appUrl;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
   const handleOpenInBrowser = () => {
-    const url = window.location.href;
-    // Try to open in external browser
-    window.open(url, '_system');
-    // Fallback: show instructions
-    setError('افتح الرابط في متصفح خارجي (Chrome/Safari) لتسجيل الدخول');
+    // Try Android intent first
+    const intentUrl = `intent://${appUrl.replace('https://', '')}#Intent;scheme=https;package=com.android.chrome;end`;
+    
+    // Create a hidden link and click it
+    const link = document.createElement('a');
+    link.href = intentUrl;
+    link.click();
+    
+    // Show instructions as fallback
+    setShowInstructions(true);
   };
 
   const handleLogin = async () => {
@@ -66,16 +72,8 @@ export default function Login() {
       await signInWithPopup(auth, googleProvider);
     } catch (popupError: any) {
       console.error('Login failed:', popupError);
-      
-      if (popupError.code === 'auth/popup-blocked' || 
-          popupError.code === 'auth/popup-closed-by-user' ||
-          popupError.code === 'auth/cancelled-popup-request' ||
-          popupError.message?.includes('storage')) {
-        setError('تسجيل الدخول غير مدعوم في هذا المتصفح. افتح التطبيق في متصفح خارجي.');
-        setInWebView(true);
-      } else {
-        setError('فشل تسجيل الدخول. حاول مرة أخرى.');
-      }
+      setShowInstructions(true);
+      setInWebView(true);
     } finally {
       setLoading(false);
     }
@@ -106,21 +104,47 @@ export default function Login() {
             <p className="text-slate-400 font-medium text-lg">Your Personal AI Telegram Manager</p>
           </div>
 
-          <div className="pt-4">
-            {error && (
-              <div className="mb-4 p-3 bg-red-500/20 border border-red-500/30 rounded-xl text-red-300 text-sm">
+          <div className="pt-4 space-y-4">
+            {showInstructions && (
+              <div className="p-4 bg-amber-500/20 border border-amber-500/30 rounded-2xl text-amber-200 text-sm space-y-3">
+                <p className="font-bold text-base">⚠️ تسجيل الدخول غير مدعوم هنا</p>
+                <p>لتسجيل الدخول، اتبع الخطوات:</p>
+                <ol className="list-decimal list-inside space-y-1 text-amber-100">
+                  <li>اضغط على النقاط الثلاث (⋮) أعلى الشاشة</li>
+                  <li>اختر <strong>"Open in Chrome"</strong> أو <strong>"Open in Browser"</strong></li>
+                  <li>سجّل الدخول من المتصفح</li>
+                </ol>
+              </div>
+            )}
+
+            {error && !showInstructions && (
+              <div className="p-3 bg-red-500/20 border border-red-500/30 rounded-xl text-red-300 text-sm">
                 {error}
               </div>
             )}
             
-            {inWebView && (
-              <button
-                onClick={handleOpenInBrowser}
-                className="w-full flex items-center justify-center gap-3 bg-indigo-600 text-white hover:bg-indigo-500 transition-all duration-300 py-4 px-6 rounded-2xl font-bold shadow-xl mb-4"
-              >
-                <ExternalLink className="w-5 h-5" />
-                فتح في متصفح خارجي
-              </button>
+            {(inWebView || showInstructions) && (
+              <div className="space-y-3">
+                <button
+                  onClick={handleOpenInBrowser}
+                  className="w-full flex items-center justify-center gap-3 bg-indigo-600 text-white hover:bg-indigo-500 transition-all duration-300 py-4 px-6 rounded-2xl font-bold shadow-xl"
+                >
+                  <ExternalLink className="w-5 h-5" />
+                  فتح في Chrome
+                </button>
+                
+                <button
+                  onClick={handleCopyLink}
+                  className="w-full flex items-center justify-center gap-3 bg-slate-700 text-white hover:bg-slate-600 transition-all duration-300 py-3 px-6 rounded-2xl font-medium"
+                >
+                  {copied ? <Check className="w-5 h-5 text-green-400" /> : <Copy className="w-5 h-5" />}
+                  {copied ? 'تم النسخ!' : 'نسخ الرابط'}
+                </button>
+                
+                <p className="text-slate-400 text-xs text-center">
+                  {appUrl}
+                </p>
+              </div>
             )}
             
             <button
