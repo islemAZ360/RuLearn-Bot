@@ -1,0 +1,86 @@
+/**
+ * أنماط CSS خاصة بإخفاء رسائل الخطأ من appCreator24
+ */
+
+/* إخفاء جميع النوافذ المنبثقة التي تحتوي على رسالة Disconnected */
+*[class*="dialog"]:has-text("Disconnected"),
+*[class*="modal"]:has-text("Disconnected"),
+*[class*="popup"]:has-text("Disconnected"),
+*[class*="dialog"]:has-text("internet connection"),
+*[class*="modal"]:has-text("internet connection"),
+*[class*="popup"]:has-text("internet connection") {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* إخفاء العناصر التي تحتوي على نص معين */
+*:has-text("Disconnected"),
+*:has-text("Please make sure you have internet connection"),
+*:has-text("Please make sure you have internet connection and try again") {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* إخفاء أزرار CLOSE */
+button:has-text("CLOSE"),
+[role="button"]:has-text("CLOSE"),
+div:has-text("CLOSE") {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* إخفاء الترافعات ذات الخلفية البيضاء التي تظهر كنوافذ منبثقة */
+div[style*="position: fixed"]:has-text("Disconnected"),
+div[style*="position: absolute"]:has-text("Disconnected") {
+  display: none !important;
+}
+
+/* إخفاء العناصر ذات الخلفية البيضاء والحدود */
+div[style*="background: white"]:has-text("Disconnected"),
+div[style*="background-color: white"]:has-text("Disconnected"),
+div[style*="background: #fff"]:has-text("Disconnected"),
+div[style*="background-color: #fff"]:has-text("Disconnected") {
+  display: none !important;
+}
+
+/* منع ظهور رسائل الخطأ عند بدء التحميل */
+body.loading * {
+  transition: opacity 0.3s ease;
+}
+
+/* إخفاء أي محتوى غير مرغوب فيه خلال أول 5 ثوانٍ */
+body.loading-startup {
+  counter-reset: appcreator24-counter;
+}
+
+body.loading-startup::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  z-index: 9999;
+  pointer-events: none;
+}
+
+/* إخفاء العناصر ذات z-index عالي */
+div[style*="z-index: 999"],
+div[style*="z-index: 9999"],
+div[style*="z-index: 1000"] {
+  display: none !important;
+}
+
+/* إخفاء العناصر التي قد تكون رسائل خطأ */
+[style*="border-radius: 10px"]:has-text("Disconnected"),
+[style*="border-radius: 8px"]:has-text("Disconnected"),
+[style*="border-radius: 5px"]:has-text("Disconnected") {
+  display: none !important;
+}
