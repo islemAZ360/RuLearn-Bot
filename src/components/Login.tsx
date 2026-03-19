@@ -23,27 +23,27 @@ export default function Login() {
       }
     } catch (err: any) {
       console.error('Auth error:', err);
-      // Translate common Firebase errors to Arabic
+      // Handle common Firebase errors
       switch (err.code) {
         case 'auth/email-already-in-use':
-          setError('هذا البريد الإلكتروني مستخدم بالفعل');
+          setError('This email is already in use');
           break;
         case 'auth/invalid-email':
-          setError('البريد الإلكتروني غير صحيح');
+          setError('Invalid email address');
           break;
         case 'auth/weak-password':
-          setError('كلمة السر ضعيفة - يجب أن تكون 6 أحرف على الأقل');
+          setError('Password is too weak - must be at least 6 characters');
           break;
         case 'auth/user-not-found':
         case 'auth/wrong-password':
         case 'auth/invalid-credential':
-          setError('البريد الإلكتروني أو كلمة السر غير صحيحة');
+          setError('Invalid email or password');
           break;
         case 'auth/too-many-requests':
-          setError('محاولات كثيرة - حاول لاحقاً');
+          setError('Too many attempts - please try again later');
           break;
         default:
-          setError('حدث خطأ. حاول مرة أخرى.');
+          setError('An error occurred. Please try again.');
       }
     } finally {
       setLoading(false);
@@ -73,7 +73,7 @@ export default function Login() {
           {/* Title */}
           <div className="space-y-1">
             <h1 className="text-3xl font-extrabold text-white tracking-tight">RuLearn</h1>
-            <p className="text-slate-400 font-medium">{isSignUp ? 'إنشاء حساب جديد' : 'تسجيل الدخول'}</p>
+            <p className="text-slate-400 font-medium">{isSignUp ? 'Create a new account' : 'Sign in to your account'}</p>
           </div>
 
           {/* Error Message */}
@@ -91,7 +91,7 @@ export default function Login() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="البريد الإلكتروني"
+                placeholder="Email address"
                 required
                 className="w-full bg-slate-800/50 border border-slate-700 rounded-xl py-3 pl-12 pr-4 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
               />
@@ -103,7 +103,7 @@ export default function Login() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="كلمة السر"
+                placeholder="Password"
                 required
                 minLength={6}
                 className="w-full bg-slate-800/50 border border-slate-700 rounded-xl py-3 pl-12 pr-4 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
@@ -122,7 +122,7 @@ export default function Login() {
               ) : (
                 <LogIn className="w-5 h-5" />
               )}
-              {loading ? 'جاري...' : isSignUp ? 'إنشاء حساب' : 'دخول'}
+              {loading ? 'Please wait...' : isSignUp ? 'Create Account' : 'Sign In'}
             </button>
           </form>
 
@@ -133,9 +133,9 @@ export default function Login() {
               onClick={() => { setIsSignUp(!isSignUp); setError(null); }}
               className="text-slate-400 hover:text-white text-sm transition-colors"
             >
-              {isSignUp ? 'لديك حساب؟ ' : 'ليس لديك حساب؟ '}
+              {isSignUp ? 'Already have an account? ' : "Don't have an account? "}
               <span className="text-indigo-400 font-semibold">
-                {isSignUp ? 'تسجيل الدخول' : 'إنشاء حساب'}
+                {isSignUp ? 'Sign In' : 'Create Account'}
               </span>
             </button>
           </div>
