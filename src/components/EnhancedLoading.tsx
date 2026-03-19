@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Bot, Wifi, WifiOff, RefreshCw, AlertTriangle, Shield } from 'lucide-react';
+import { Bot, Wifi, WifiOff, RefreshCw, AlertTriangle, Shield, Clock } from 'lucide-react';
 import { NetworkDetector, NetworkStatus } from '../utils/networkDetector';
 import { RetryManager } from '../utils/retryManager';
 import { APP_CONFIG, getErrorMessage, requiresVPN } from '../config/appConfig';
@@ -15,6 +15,7 @@ export default function EnhancedLoading({ onLoadingComplete, onLoadingFailed }: 
   const [currentStep, setCurrentStep] = useState(0);
   const [retryCount, setRetryCount] = useState(0);
   const [errorDetails, setErrorDetails] = useState<string>('');
+  const [showSlowMessage, setShowSlowMessage] = useState(false);
 
   const loadingSteps = APP_CONFIG.LOADING.STEPS;
 
@@ -23,9 +24,15 @@ export default function EnhancedLoading({ onLoadingComplete, onLoadingFailed }: 
     networkDetector.addListener(handleNetworkChange);
     
     startLoadingProcess();
+
+    // Show slow loading message after threshold
+    const slowTimer = setTimeout(() => {
+      setShowSlowMessage(true);
+    }, APP_CONFIG.LOADING.SLOW_THRESHOLD);
     
     return () => {
       networkDetector.removeListener(handleNetworkChange);
+      clearTimeout(slowTimer);
     };
   }, []);
 
@@ -38,7 +45,7 @@ export default function EnhancedLoading({ onLoadingComplete, onLoadingFailed }: 
       setStatus('checking');
       setCurrentStep(0);
       
-      // التحقق من حالة الشبكة
+      // Check network status
       const networkStatus = await NetworkDetector.getInstance().checkConnectivity();
       setNetworkStatus(networkStatus);
       
@@ -49,18 +56,16 @@ export default function EnhancedLoading({ onLoadingComplete, onLoadingFailed }: 
       setStatus('loading');
       setCurrentStep(1);
 
-      // محاولة الاتصال بـ Firebase مع إعادة المحاولة
+      // Try connecting to Firebase with retry
       await RetryManager.executeWithRetryAndTimeout(
         async () => {
           if (!networkStatus.canReachFirebase) {
-            // محاولة التحقق مرة أخرى
             const freshStatus = await NetworkDetector.getInstance().checkConnectivity();
             if (!freshStatus.canReachFirebase) {
               throw new Error(APP_CONFIG.ERROR_MESSAGES.FIREBASE_UNREACHABLE);
             }
           }
-          // هنا سيتم تحميل Firebase الفعلي
-          await new Promise(resolve => setTimeout(resolve, 1000)); // محاكاة التحميل
+          await new Promise(resolve => setTimeout(resolve, 1000));
         },
         {
           maxRetries: APP_CONFIG.NETWORK.RETRY.MAX_RETRIES,
@@ -73,23 +78,23 @@ export default function EnhancedLoading({ onLoadingComplete, onLoadingFailed }: 
 
       setCurrentStep(2);
 
-      // تحميل الإعدادات
+      // Load settings
       await loadAppSettings();
 
       setCurrentStep(3);
 
-      // تهيئة المصادقة
+      // Initialize auth
       await initializeAuth();
 
       setCurrentStep(4);
 
-      // اكتمال التحميل
+      // Complete loading
       setTimeout(() => {
         onLoadingComplete();
       }, 500);
 
     } catch (error) {
-      console.error('فشل التحميل:', error);
+      console.error('Loading failed:', error);
       setErrorDetails(getErrorMessage(error));
       setStatus('failed');
       onLoadingFailed(getErrorMessage(error));
@@ -99,7 +104,6 @@ export default function EnhancedLoading({ onLoadingComplete, onLoadingFailed }: 
   const loadAppSettings = async () => {
     await RetryManager.executeWithTimeout(
       async () => {
-        // تحميل الإعدادات من localStorage أو الخادم
         await new Promise(resolve => setTimeout(resolve, 800));
       },
       APP_CONFIG.NETWORK.TIMEOUTS.NETWORK_CHECK
@@ -109,7 +113,6 @@ export default function EnhancedLoading({ onLoadingComplete, onLoadingFailed }: 
   const initializeAuth = async () => {
     await RetryManager.executeWithTimeout(
       async () => {
-        // تهيئة Firebase Auth
         await new Promise(resolve => setTimeout(resolve, 800));
       },
       APP_CONFIG.NETWORK.TIMEOUTS.AUTH_OPERATION
@@ -120,6 +123,7 @@ export default function EnhancedLoading({ onLoadingComplete, onLoadingFailed }: 
     setRetryCount(prev => prev + 1);
     setStatus('retrying');
     setErrorDetails('');
+    setShowSlowMessage(false);
     startLoadingProcess();
   };
 
@@ -149,13 +153,13 @@ export default function EnhancedLoading({ onLoadingComplete, onLoadingFailed }: 
 
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center relative overflow-hidden">
-      {/* الخلفية المتحركة */}
+      {/* Animated background */}
       <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-indigo-600/20 rounded-full blur-[128px] pointer-events-none"></div>
       <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-violet-600/20 rounded-full blur-[128px] pointer-events-none"></div>
       
-      {/* المحتوى الرئيسي */}
+      {/* Main content */}
       <div className="relative z-10 flex flex-col items-center gap-6 max-w-md w-full px-6">
-        {/* الأيقونة والحالة */}
+        {/* Icon and status */}
         <div className="flex flex-col items-center gap-4">
           <div className="w-20 h-20 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-2xl flex items-center justify-center shadow-2xl shadow-indigo-500/30">
             <Bot className="w-10 h-10 text-white" strokeWidth={2} />
@@ -167,18 +171,18 @@ export default function EnhancedLoading({ onLoadingComplete, onLoadingFailed }: 
           </div>
         </div>
 
-        {/* حالة الشبكة */}
+        {/* Network status */}
         {networkStatus && (
           <div className="flex items-center gap-2 text-xs text-slate-400 bg-slate-900/50 px-3 py-2 rounded-full">
             {getNetworkStatusIcon()}
             <span>
-              {networkStatus.isOnline ? 'متصل' : 'غير متصل'}
-              {networkStatus.canReachFirebase ? ' • Firebase متاح' : ' • Firebase غير متاح'}
+              {networkStatus.isOnline ? 'Connected' : 'Disconnected'}
+              {networkStatus.canReachFirebase ? ' • Firebase available' : ' • Firebase unavailable'}
             </span>
           </div>
         )}
 
-        {/* شريط التقدم */}
+        {/* Progress bar */}
         <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
           <div 
             className="bg-gradient-to-r from-indigo-500 to-violet-600 h-full transition-all duration-500 ease-out"
@@ -186,19 +190,27 @@ export default function EnhancedLoading({ onLoadingComplete, onLoadingFailed }: 
           />
         </div>
 
-        {/* خطوة التحميل الحالية */}
+        {/* Current loading step */}
         <div className="text-center">
           <p className="text-slate-300 font-medium">
             {loadingSteps[Math.min(currentStep, loadingSteps.length - 1)]}
           </p>
           {status === 'retrying' && (
             <p className="text-slate-500 text-sm mt-1">
-              إعادة المحاولة {retryCount + 1}...
+              Retrying ({retryCount + 1})...
             </p>
           )}
         </div>
 
-        {/* رسالة الخطأ */}
+        {/* Slow loading message */}
+        {showSlowMessage && status !== 'failed' && (
+          <div className="flex items-center gap-2 text-sm text-amber-400/80 bg-amber-500/10 border border-amber-500/20 rounded-lg px-4 py-2.5 animate-fade-in">
+            <Clock className="w-4 h-4 shrink-0" />
+            <span>{APP_CONFIG.LOADING.SLOW_MESSAGE}</span>
+          </div>
+        )}
+
+        {/* Error message */}
         {status === 'failed' && (
           <div className="w-full bg-red-500/10 border border-red-500/20 rounded-lg p-4">
             <p className="text-red-400 text-sm text-center mb-3">
@@ -209,7 +221,7 @@ export default function EnhancedLoading({ onLoadingComplete, onLoadingFailed }: 
               <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 mb-3">
                 <div className="flex items-center gap-2 text-blue-400 text-xs">
                   <Shield className="w-4 h-4" />
-                  <span>قد تحتاج إلى تشغيل VPN للوصول إلى التطبيق في منطقتك</span>
+                  <span>You may need to enable a VPN to access the app in your region</span>
                 </div>
               </div>
             )}
@@ -219,12 +231,12 @@ export default function EnhancedLoading({ onLoadingComplete, onLoadingFailed }: 
               className="w-full bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded-lg flex items-center justify-center gap-2 transition-colors"
             >
               <RefreshCw className="w-4 h-4" />
-              إعادة المحاولة
+              Retry
             </button>
           </div>
         )}
 
-        {/* النقاط المتحركة */}
+        {/* Animated dots */}
         {status !== 'failed' && (
           <div className="flex items-center gap-1">
             <div className="w-2 h-2 bg-indigo-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>

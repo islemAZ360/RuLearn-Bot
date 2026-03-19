@@ -101,14 +101,14 @@ export default function App() {
           </div>
           
           <div className="text-center">
-            <h1 className="text-2xl font-bold text-white mb-2">فشل التحميل</h1>
+            <h1 className="text-2xl font-bold text-white mb-2">Loading Failed</h1>
             <p className="text-slate-300 mb-4">{loadingError}</p>
             
             {requiresVPN({ message: loadingError }) && (
               <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 mb-4">
                 <div className="flex items-center gap-2 text-blue-400 text-sm">
                   <Shield className="w-4 h-4" />
-                  <span>قد تحتاج إلى تشغيل VPN للوصول إلى التطبيق في منطقتك</span>
+                  <span>You may need to enable a VPN to access the app in your region</span>
                 </div>
               </div>
             )}
@@ -117,7 +117,7 @@ export default function App() {
               onClick={() => window.location.reload()}
               className="bg-indigo-500 hover:bg-indigo-600 text-white px-6 py-3 rounded-lg flex items-center gap-2 transition-colors mx-auto"
             >
-              إعادة تحميل الصفحة
+              Reload Page
             </button>
           </div>
         </div>
@@ -134,7 +134,7 @@ export default function App() {
   return (
     <div className="flex flex-col md:flex-row h-screen bg-slate-50 font-sans text-slate-900 overflow-hidden selection:bg-indigo-500/30">
       {/* Mobile Header */}
-      <div className="md:hidden bg-slate-950 border-b border-slate-800 px-4 py-3 flex justify-between items-center z-20 shadow-lg relative">
+      <div className="md:hidden bg-slate-950 border-b border-slate-800 px-4 py-3 flex justify-between items-center z-20 shadow-lg relative" style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))' }}>
         <div className="absolute top-0 left-0 right-0 h-full bg-gradient-to-b from-indigo-500/10 to-transparent pointer-events-none"></div>
         <h1 className="text-lg font-extrabold text-white flex items-center gap-2 tracking-tight relative z-10">
           <div className="p-1.5 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg shadow-lg shadow-indigo-500/20">

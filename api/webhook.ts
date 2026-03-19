@@ -30,8 +30,10 @@ if (!getApps().length) {
 
 const db = getFirestore();
 
-// Pending saves storage (in-memory, per request)
-const pendingSaves: Record<string, { type: 'verbs' | 'words', items: {ru: string, ar: string}[] }> = {};
+// Helper function to detect if text contains Cyrillic (Russian) characters
+function containsCyrillic(text: string): boolean {
+  return /[\u0400-\u04FF]/.test(text);
+}
 
 // Helper function to save data with proper error handling
 async function saveToCollection(collectionName: string, data: any) {
@@ -43,6 +45,21 @@ async function saveToCollection(collectionName: string, data: any) {
     console.error(`Error saving to ${collectionName}:`, error);
     throw error;
   }
+}
+
+// Helper function to save/get pending items from Firestore (persistent across serverless invocations)
+async function savePending(chatId: string, type: 'verbs' | 'words', items: {ru: string, ar: string}[]) {
+  await db.collection('pendingSaves').doc(chatId).set({ type, items, timestamp: Date.now() });
+}
+
+async function getPending(chatId: string): Promise<{ type: 'verbs' | 'words', items: {ru: string, ar: string}[] } | null> {
+  const doc = await db.collection('pendingSaves').doc(chatId).get();
+  if (!doc.exists) return null;
+  return doc.data() as any;
+}
+
+async function clearPending(chatId: string) {
+  await db.collection('pendingSaves').doc(chatId).delete();
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -125,10 +142,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const aiBaseUrl = config.aiBaseUrl || 'https://api.kiro.cheap';
     const aiModel = config.aiModel || 'claude-opus-4-6';
 
-    // Helper to call AI
-    const callAI = async (prompt: string): Promise<string> => {
+    // System prompt for AI to act as a Russian language learning assistant
+    const systemPrompt = `You are a Russian language learning assistant. Your primary role is to help users learn Russian. 
+When a user sends you a message:
+- If they write in Russian, translate it to ${targetLang} and explain any grammar points briefly.
+- If they write in ${targetLang} or English, help them express it in Russian.
+- Keep your responses focused on language learning.
+- Be concise and helpful.
+- Always respond in the context of Russian language learning.`;
+
+    // Helper to call AI with system prompt
+    const callAI = async (prompt: string, useSystemPrompt: boolean = true): Promise<string> => {
       if (!aiApiKey) throw new Error('No AI API key');
       
+      const messages: any[] = [];
+      if (useSystemPrompt) {
+        messages.push({ role: 'system', content: systemPrompt });
+      }
+      messages.push({ role: 'user', content: prompt });
+
       const response = await fetch(`${aiBaseUrl}/v1/chat/completions`, {
         method: 'POST',
         headers: {
@@ -137,7 +169,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         },
         body: JSON.stringify({
           model: aiModel,
-          messages: [{ role: 'user', content: prompt }],
+          messages,
           max_tokens: 2048,
         }),
       });
@@ -147,16 +179,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return data.choices?.[0]?.message?.content || '';
     };
 
+    // Normalize text for command matching (case-insensitive)
+    const textLower = text.toLowerCase().trim();
+
     // Handle commands
-    if (text === '/start' || text === '/help' || text === 'help') {
+    if (textLower === '/start' || textLower === '/help' || textLower === 'help') {
       const helpText = `Welcome! 🤖
 Here is how I can help you:
 
-1. **Normal Conversation**: Send any message and I will reply as an AI assistant.
+1. **Normal Conversation**: Send any message and I will reply as a Russian language assistant.
 2. **Translate & Save**: Send text ending with a period (e.g., привет.). I will translate it to **${targetLang}** and save it.
-3. **Extract Verbs**: Send text ending with v (e.g., я иду домой v).
-4. **Extract Words**: Send text ending with w (e.g., я иду домой w).
-5. **Save Extractions**: After extracting, send . to save!
+3. **Just Translate**: Send Russian text WITHOUT a period and I will translate it without saving.
+4. **Extract Verbs**: Send text ending with v (e.g., я иду домой v).
+5. **Extract Words**: Send text ending with w (e.g., я иду домой w).
+6. **Save Extractions**: After extracting, send . to save!
 
 **Commands**:
 - /help: Show this menu
@@ -167,8 +203,8 @@ Here is how I can help you:
       return res.status(200).json({ ok: true });
     }
 
-    // Show saved sentences
-    if (text === 'all') {
+    // Show saved sentences (case-insensitive)
+    if (textLower === 'all') {
       try {
         const q = db.collection('sentences').where('userId', '==', userId).orderBy('timestamp', 'desc').limit(20);
         const docs = await q.get();
@@ -181,13 +217,18 @@ Here is how I can help you:
         }
       } catch (e: any) {
         console.error('Error fetching sentences:', e);
-        await sendMsg('Failed to fetch sentences.');
+        // Check if it's an index error and provide helpful message
+        if (e.code === 9 || e.message?.includes('index')) {
+          await sendMsg('Database index is being created. Please try again in a few minutes.\n\nIf this persists, check the Firebase Console for missing indexes.');
+        } else {
+          await sendMsg('Failed to fetch sentences.');
+        }
       }
       return res.status(200).json({ ok: true });
     }
 
-    // Show saved verbs
-    if (text === 'verbs') {
+    // Show saved verbs (case-insensitive)
+    if (textLower === 'verbs') {
       try {
         const q = db.collection('verbs').where('userId', '==', userId).orderBy('timestamp', 'desc').limit(50);
         const docs = await q.get();
@@ -200,13 +241,17 @@ Here is how I can help you:
         }
       } catch (e: any) {
         console.error('Error fetching verbs:', e);
-        await sendMsg('Failed to fetch verbs.');
+        if (e.code === 9 || e.message?.includes('index')) {
+          await sendMsg('Database index is being created. Please try again in a few minutes.');
+        } else {
+          await sendMsg('Failed to fetch verbs.');
+        }
       }
       return res.status(200).json({ ok: true });
     }
 
-    // Show saved words
-    if (text === 'words') {
+    // Show saved words (case-insensitive)
+    if (textLower === 'words') {
       try {
         const q = db.collection('words').where('userId', '==', userId).orderBy('timestamp', 'desc').limit(50);
         const docs = await q.get();
@@ -219,15 +264,18 @@ Here is how I can help you:
         }
       } catch (e: any) {
         console.error('Error fetching words:', e);
-        await sendMsg('Failed to fetch words.');
+        if (e.code === 9 || e.message?.includes('index')) {
+          await sendMsg('Database index is being created. Please try again in a few minutes.');
+        } else {
+          await sendMsg('Failed to fetch words.');
+        }
       }
       return res.status(200).json({ ok: true });
     }
 
-    // Save pending items
+    // Save pending items (persistent via Firestore)
     if (text === '.') {
-      const pendingKey = `${chatId}`;
-      const pending = pendingSaves[pendingKey];
+      const pending = await getPending(`${chatId}`);
       if (pending) {
         try {
           let savedCount = 0;
@@ -241,7 +289,7 @@ Here is how I can help you:
             savedCount++;
           }
           await sendMsg(`Saved ${savedCount} ${pending.type} to database! ✅`);
-          delete pendingSaves[pendingKey];
+          await clearPending(`${chatId}`);
         } catch (e: any) {
           console.error('Batch save error:', e);
           await sendMsg('Failed to save items. Please try again.');
@@ -253,14 +301,14 @@ Here is how I can help you:
     }
 
     // Extract verbs
-    if (text.endsWith(' v')) {
+    if (text.endsWith(' v') || text.endsWith(' V')) {
       const ruText = text.slice(0, -2).trim();
       const prompt = `Extract all verbs from the following text. Return ONLY a valid JSON array of objects, where each object has "ru" (the verb in infinitive/base form) and "ar" (the ${targetLang} translation). Do not include any other text or markdown formatting outside the JSON array.\n\nText: ${ruText}`;
       try {
-        const response = await callAI(prompt);
+        const response = await callAI(prompt, false);
         const jsonStr = response.replace(/```json/g, '').replace(/```/g, '').trim();
         const verbs = JSON.parse(jsonStr);
-        pendingSaves[`${chatId}`] = { type: 'verbs', items: verbs };
+        await savePending(`${chatId}`, 'verbs', verbs);
         const reply = verbs.map((v: any) => `${v.ru} - ${v.ar}`).join('\n');
         await sendMsg(`**Extracted Verbs (${targetLang}):**\n${reply}\n\nReply with . to save.`);
       } catch (e) {
@@ -270,14 +318,14 @@ Here is how I can help you:
     }
 
     // Extract words
-    if (text.endsWith(' w')) {
+    if (text.endsWith(' w') || text.endsWith(' W')) {
       const ruText = text.slice(0, -2).trim();
       const prompt = `Extract the main words (nouns, adjectives, adverbs) from the following text. Return ONLY a valid JSON array of objects, where each object has "ru" (the word in base form) and "ar" (the ${targetLang} translation). Do not include any other text or markdown formatting outside the JSON array.\n\nText: ${ruText}`;
       try {
-        const response = await callAI(prompt);
+        const response = await callAI(prompt, false);
         const jsonStr = response.replace(/```json/g, '').replace(/```/g, '').trim();
         const words = JSON.parse(jsonStr);
-        pendingSaves[`${chatId}`] = { type: 'words', items: words };
+        await savePending(`${chatId}`, 'words', words);
         const reply = words.map((w: any) => `${w.ru} - ${w.ar}`).join('\n');
         await sendMsg(`**Extracted Words (${targetLang}):**\n${reply}\n\nReply with . to save.`);
       } catch (e) {
@@ -291,7 +339,7 @@ Here is how I can help you:
       const ruText = text.slice(0, -1).trim();
       const prompt = `Translate the following text to ${targetLang}. Return ONLY the ${targetLang} translation, nothing else.\n\nText: ${ruText}`;
       try {
-        const translation = await callAI(prompt);
+        const translation = await callAI(prompt, false);
         await saveToCollection('sentences', {
           ru: ruText,
           ar: translation.trim(),
@@ -306,9 +354,21 @@ Here is how I can help you:
       return res.status(200).json({ ok: true });
     }
 
-    // Default AI conversation
+    // Russian text WITHOUT period -> translate only, do NOT save
+    if (containsCyrillic(text)) {
+      const prompt = `Translate the following Russian text to ${targetLang}. Return ONLY the ${targetLang} translation, nothing else.\n\nText: ${text}`;
+      try {
+        const translation = await callAI(prompt, false);
+        await sendMsg(`**Translation (${targetLang}):**\n${translation.trim()}\n\n_💡 Add a period (.) at the end to translate and save._`);
+      } catch (e) {
+        await sendMsg('Translation failed. Please try again.');
+      }
+      return res.status(200).json({ ok: true });
+    }
+
+    // Default AI conversation (with system prompt for language learning context)
     try {
-      const aiResponse = await callAI(text);
+      const aiResponse = await callAI(text, true);
       await sendMsg(aiResponse.trim());
     } catch (e) {
       await sendMsg('AI Error. Please check your AI API settings.');
