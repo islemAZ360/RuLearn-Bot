@@ -1,5 +1,8 @@
 import { handleTelegramMessage } from './messageHandler';
-import { auth } from '../firebase';
+import { auth, db } from '../firebase';
+import { doc, setDoc, deleteDoc, getDoc } from 'firebase/firestore';
+
+const WEBHOOK_BASE_URL = 'https://ru-learn-bot.vercel.app/api/webhook';
 
 let isPolling = false;
 let lastUpdateId = 0;
@@ -31,6 +34,12 @@ function getToken() {
 export async function startBot() {
   if (isPolling) return;
   
+  const userId = auth.currentUser?.uid;
+  if (!userId) {
+    addLog('Error: User not logged in.', 'error');
+    return;
+  }
+  
   const token = getToken();
   if (!token) {
     addLog('Error: Bot Token is missing. Please add it in Settings.', 'error');
@@ -38,45 +47,131 @@ export async function startBot() {
   }
 
   isPolling = true;
-  addLog('Bot started polling...', 'info');
+  addLog('Starting bot...', 'info');
   
-  try {
-    // Delete any existing webhook to avoid 409 Conflict errors during polling
-    const res = await fetch(`https://api.telegram.org/bot${token}/deleteWebhook`);
-    if (res.ok) {
-      addLog('Cleared existing webhooks.', 'info');
-    }
-  } catch (e: any) {
-    addLog(`Failed to clear webhook: ${e.message}`, 'error');
-  }
+  // Get user settings
+  const aiApiKey = localStorage.getItem(`${userId}_ai_api_key`) || localStorage.getItem('ai_api_key') || '';
+  const aiBaseUrl = localStorage.getItem(`${userId}_ai_base_url`) || localStorage.getItem('ai_base_url') || 'https://api.kiro.cheap';
+  const aiModel = localStorage.getItem(`${userId}_ai_model`) || localStorage.getItem('ai_model') || 'claude-opus-4-6';
+  const translationLanguage = localStorage.getItem(`${userId}_translation_language`) || localStorage.getItem('translation_language') || 'Arabic';
 
-  // Send proactive welcome message if we have a saved chat ID
-  const userId = auth.currentUser?.uid;
-  if (userId) {
-    const lastChatId = localStorage.getItem(`${userId}_last_chat_id`);
-    if (lastChatId) {
-      const targetLang = localStorage.getItem(`${userId}_translation_language`) || localStorage.getItem('translation_language') || 'Arabic';
-      const welcomeMsg = `🟢 **Bot is now ONLINE!**\n\nI am ready to help you.\n- Normal messages: I will reply as a smart AI.\n- End with \`.\`: Translate to **${targetLang}** & save.\n- End with \`v\`: Extract verbs.\n- End with \`w\`: Extract words.`;
+  try {
+    // First, get the chat ID by sending a test or getting updates
+    const updatesRes = await fetch(`https://api.telegram.org/bot${token}/getUpdates?limit=1`);
+    const updatesData = await updatesRes.json();
+    let chatId = localStorage.getItem(`${userId}_last_chat_id`) || '';
+    
+    if (updatesData.ok && updatesData.result.length > 0) {
+      chatId = updatesData.result[0].message?.chat?.id?.toString() || chatId;
+      if (chatId) {
+        localStorage.setItem(`${userId}_last_chat_id`, chatId);
+      }
+    }
+
+    // Save bot config to Firebase
+    const configRef = doc(db, 'botConfigs', `${userId}_${token.slice(-10)}`);
+    await setDoc(configRef, {
+      userId,
+      botToken: token,
+      chatId: chatId,
+      aiApiKey,
+      aiBaseUrl,
+      aiModel,
+      translationLanguage,
+      active: true,
+      updatedAt: Date.now()
+    });
+    addLog('Saved bot configuration to cloud.', 'info');
+
+    // Register webhook with Telegram (include config ID in URL)
+    const configId = `${userId}_${token.slice(-10)}`;
+    const webhookUrl = `${WEBHOOK_BASE_URL}?configId=${encodeURIComponent(configId)}`;
+    const webhookRes = await fetch(`https://api.telegram.org/bot${token}/setWebhook?url=${encodeURIComponent(webhookUrl)}`);
+    const webhookData = await webhookRes.json();
+    
+    if (webhookData.ok) {
+      addLog('Webhook registered successfully!', 'info');
+      addLog('Bot is now running in cloud mode.', 'info');
+      addLog('You can close this app - bot will keep working!', 'info');
       
-      try {
+      // Send notification to user
+      if (chatId) {
         await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ chat_id: lastChatId, text: welcomeMsg, parse_mode: 'Markdown' })
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: `🟢 **Bot is now ONLINE (Cloud Mode)!**\n\nI will keep running even if you close the app.\n\nTranslation language: **${translationLanguage}**`,
+            parse_mode: 'Markdown'
+          })
         });
-        addLog(`Sent startup notification to chat ${lastChatId}`, 'info');
-      } catch (e: any) {
-        addLog(`Failed to send startup notification: ${e.message}`, 'error');
+        addLog(`Sent startup notification to chat ${chatId}`, 'info');
       }
+    } else {
+      addLog(`Webhook registration failed: ${webhookData.description}`, 'error');
+      // Fallback to polling mode
+      addLog('Falling back to polling mode (requires app to stay open)', 'info');
+      startPollingMode();
     }
+  } catch (e: any) {
+    addLog(`Error: ${e.message}`, 'error');
+    addLog('Falling back to polling mode', 'info');
+    startPollingMode();
+  }
+}
+
+async function startPollingMode() {
+  const token = getToken();
+  
+  try {
+    // Delete webhook for polling
+    await fetch(`https://api.telegram.org/bot${token}/deleteWebhook`);
+    addLog('Cleared webhooks, starting polling...', 'info');
+  } catch (e: any) {
+    addLog(`Failed to clear webhook: ${e.message}`, 'error');
   }
 
   poll();
 }
 
-export function stopBot() {
+export async function stopBot() {
   isPolling = false;
   if (pollTimeout) clearTimeout(pollTimeout);
+  
+  const userId = auth.currentUser?.uid;
+  const token = getToken();
+  
+  if (userId && token) {
+    try {
+      // Delete webhook
+      await fetch(`https://api.telegram.org/bot${token}/deleteWebhook`);
+      addLog('Webhook removed.', 'info');
+      
+      // Update config in Firebase
+      const configRef = doc(db, 'botConfigs', `${userId}_${token.slice(-10)}`);
+      const configSnap = await getDoc(configRef);
+      if (configSnap.exists()) {
+        await setDoc(configRef, { ...configSnap.data(), active: false, updatedAt: Date.now() });
+      }
+      
+      // Notify user
+      const chatId = localStorage.getItem(`${userId}_last_chat_id`);
+      if (chatId) {
+        await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: '🔴 **Bot is now OFFLINE.**',
+            parse_mode: 'Markdown'
+          })
+        });
+      }
+    } catch (e: any) {
+      addLog(`Error stopping: ${e.message}`, 'error');
+    }
+  }
+  
   addLog('Bot stopped.', 'info');
 }
 
