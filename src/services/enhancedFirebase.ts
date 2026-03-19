@@ -141,8 +141,4 @@ class EnhancedFirebaseService {
 // تصدير الخدمة المحسنة
 export const enhancedFirebase = EnhancedFirebaseService.getInstance();
 
-// تصدير التوافق القديم
-export const app = enhancedFirebase.getApp();
-export const db = enhancedFirebase.getFirestore();
-export const auth = enhancedFirebase.getAuth();
-export const googleProvider = enhancedFirebase.getGoogleProvider();
+// تصدير التوافق القديم - تم إزالته لتجنب أخطاء التحميل المتزامن
