@@ -30,7 +30,13 @@ export default function Login() {
   const appUrl = 'https://learn-bot.vercel.app';
 
   useEffect(() => {
-    setInWebView(isWebView());
+    const webview = isWebView();
+    setInWebView(webview);
+    
+    // If in WebView, show instructions immediately
+    if (webview) {
+      setShowInstructions(true);
+    }
   }, []);
 
   const handleCopyLink = async () => {
