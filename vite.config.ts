@@ -17,13 +17,6 @@ export default defineConfig(({mode}) => {
     },
     server: {
       hmr: process.env.DISABLE_HMR !== 'true',
-      proxy: {
-        '/api/ai': {
-          target: 'https://api.kiro.cheap',
-          changeOrigin: true,
-          rewrite: (path) => path.replace(/^\/api\/ai/, '')
-        }
-      }
     },
   };
 });

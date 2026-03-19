@@ -35,9 +35,10 @@ export default function Settings() {
     setAiApiKey(localStorage.getItem(`${userId}_ai_api_key`) || localStorage.getItem('ai_api_key') || '');
     setTranslationLanguage(localStorage.getItem(`${userId}_translation_language`) || localStorage.getItem('translation_language') || 'English');
     
-    let savedBaseUrl = localStorage.getItem(`${userId}_ai_base_url`) || localStorage.getItem('ai_base_url') || '/api/ai';
-    if (savedBaseUrl === 'https://api.kiro.cheap') {
-      savedBaseUrl = '/api/ai';
+    let savedBaseUrl = localStorage.getItem(`${userId}_ai_base_url`) || localStorage.getItem('ai_base_url') || 'https://api.kiro.cheap';
+    // Convert old proxy path to direct URL
+    if (savedBaseUrl === '/api/ai') {
+      savedBaseUrl = 'https://api.kiro.cheap';
     }
     setAiBaseUrl(savedBaseUrl);
     
@@ -90,7 +91,7 @@ export default function Settings() {
     setAiModel(AI_PROVIDERS[provider][0]); // Auto-select first model
     
     if (provider === 'Custom (kiro.cheap)') {
-      setAiBaseUrl('/api/ai');
+      setAiBaseUrl('https://api.kiro.cheap');
     } else if (provider === 'OpenAI') {
       setAiBaseUrl('https://api.openai.com/v1');
     } else if (provider === 'Anthropic') {

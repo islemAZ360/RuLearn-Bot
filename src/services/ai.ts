@@ -5,10 +5,11 @@ export async function callAI(
   onChunk?: (chunk: string) => void
 ) {
   const apiKey = localStorage.getItem('ai_api_key') || '';
-  let baseUrl = localStorage.getItem('ai_base_url') || '/api/ai';
+  let baseUrl = localStorage.getItem('ai_base_url') || 'https://api.kiro.cheap';
   
-  if (baseUrl === 'https://api.kiro.cheap') {
-    baseUrl = '/api/ai';
+  // Convert old proxy path to direct URL
+  if (baseUrl === '/api/ai') {
+    baseUrl = 'https://api.kiro.cheap';
   }
   
   const model = localStorage.getItem('ai_model') || 'claude-opus-4-6';
