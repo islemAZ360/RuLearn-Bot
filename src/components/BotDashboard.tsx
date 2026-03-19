@@ -1,12 +1,30 @@
 import React, { useEffect, useState } from 'react';
 import { Play, Square, Activity, Terminal } from 'lucide-react';
-import { startBot, stopBot, getBotStatus, getLogs, setLogListener, LogEntry } from '../services/telegram';
+import { startBot, stopBot, getBotStatus, getLogs, setLogListener, LogEntry, checkBotStatusFromFirebase, addLogPublic } from '../services/telegram';
 
 export default function BotDashboard() {
   const [isRunning, setIsRunning] = useState(getBotStatus());
   const [logs, setLogs] = useState<LogEntry[]>(getLogs());
+  const [isLoading, setIsLoading] = useState(true);
 
+  // Load bot status from Firebase on mount
   useEffect(() => {
+    const loadStatus = async () => {
+      try {
+        const firebaseStatus = await checkBotStatusFromFirebase();
+        if (firebaseStatus && !isRunning) {
+          setIsRunning(true);
+          addLogPublic('Bot status restored from cloud. Bot is running in background.', 'info');
+        }
+      } catch (e: any) {
+        console.error('Error loading bot status:', e);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    loadStatus();
+    
     setLogListener(() => {
       setLogs([...getLogs()]);
     });
@@ -61,9 +79,15 @@ export default function BotDashboard() {
             <span className="text-xs font-mono text-slate-400">system_logs.sh</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full ${isRunning ? 'bg-emerald-500 animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.8)]' : 'bg-slate-600'}`}></div>
-            <span className={`text-xs font-bold uppercase tracking-wider ${isRunning ? 'text-emerald-500' : 'text-slate-500'}`}>
-              {isRunning ? 'Online' : 'Offline'}
+            <div className={`w-2 h-2 rounded-full ${
+              isLoading ? 'bg-amber-500 animate-pulse' :
+              isRunning ? 'bg-emerald-500 animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.8)]' : 'bg-slate-600'
+            }`}></div>
+            <span className={`text-xs font-bold uppercase tracking-wider ${
+              isLoading ? 'text-amber-500' :
+              isRunning ? 'text-emerald-500' : 'text-slate-500'
+            }`}>
+              {isLoading ? 'Syncing...' : isRunning ? 'Online' : 'Offline'}
             </span>
           </div>
         </div>

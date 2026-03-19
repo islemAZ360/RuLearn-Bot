@@ -26,6 +26,10 @@ function addLog(message: string, type: 'info' | 'error' | 'msg' = 'info') {
   onLogUpdate();
 }
 
+export function addLogPublic(message: string, type: 'info' | 'error' | 'msg' = 'info') {
+  addLog(message, type);
+}
+
 function getToken() {
   const userId = auth.currentUser?.uid || '';
   return localStorage.getItem(`${userId}_telegram_token`) || localStorage.getItem('telegram_token') || '';
@@ -177,6 +181,29 @@ export async function stopBot() {
 
 export function getBotStatus() {
   return isPolling;
+}
+
+// Check bot status from Firebase
+export async function checkBotStatusFromFirebase(): Promise<boolean> {
+  const userId = auth.currentUser?.uid;
+  if (!userId) return false;
+  
+  const token = getToken();
+  if (!token) return false;
+  
+  try {
+    const configRef = doc(db, 'botConfigs', `${userId}_${token.slice(-10)}`);
+    const configSnap = await getDoc(configRef);
+    
+    if (configSnap.exists()) {
+      const config = configSnap.data();
+      return config.active === true;
+    }
+  } catch (e: any) {
+    console.error('Error checking bot status:', e);
+  }
+  
+  return false;
 }
 
 async function poll() {
