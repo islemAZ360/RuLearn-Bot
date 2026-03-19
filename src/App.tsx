@@ -4,15 +4,18 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Bot, MessageSquare, Database, Settings as SettingsIcon, LogOut } from 'lucide-react';
+import { Bot, MessageSquare, Database, Settings as SettingsIcon, LogOut, Shield } from 'lucide-react';
 import { onAuthStateChanged, signOut, User, getRedirectResult } from 'firebase/auth';
-import { auth } from './firebase';
+import { enhancedFirebase } from './services/enhancedFirebase';
 import { MonetagService } from './services/monetag';
+import { NetworkDetector } from './utils/networkDetector';
+import { APP_CONFIG, getErrorMessage, requiresVPN } from './config/appConfig';
 import BotDashboard from './components/BotDashboard';
 import WebChat from './components/WebChat';
 import DatabaseView from './components/DatabaseView';
 import Settings from './components/Settings';
 import Login from './components/Login';
+import EnhancedLoading from './components/EnhancedLoading';
 
 const OWNER_EMAIL = '12azaiziaislam@gmail.com';
 
@@ -20,67 +23,102 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<'bot' | 'chat' | 'db' | 'settings'>('bot');
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingError, setLoadingError] = useState<string>('');
+  const [appReady, setAppReady] = useState(false);
 
   const isAdmin = user?.email === OWNER_EMAIL;
 
-  useEffect(() => {
-    // Load Monetag Zone ID from localStorage
-    const savedZoneId = localStorage.getItem('monetag_zone_id') || '10748605';
-    
-    // Inject Monetag internally on app load
-    MonetagService.injectScript(savedZoneId);
-
-    // Register Service Worker for Monetag
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js')
-        .then(reg => console.log('Monetag SW registered', reg))
-        .catch(err => console.error('Monetag SW registration failed', err));
+  const handleLoadingComplete = async () => {
+    try {
+      // تهيئة Firebase
+      await enhancedFirebase.initialize();
+      
+      // تحميل Monetag كخدمة اختيارية
+      const savedZoneId = localStorage.getItem('monetag_zone_id') || APP_CONFIG.MONETAG.DEFAULT_ZONE_ID;
+      await MonetagService.loadScript(savedZoneId);
+      
+      // تسجيل Service Worker
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js')
+          .then(reg => console.log('Service Worker registered', reg))
+          .catch(err => console.warn('Service Worker registration failed:', err));
+      }
+      
+      setAppReady(true);
+      setLoading(false);
+    } catch (error) {
+      console.error('فشل تهيئة التطبيق:', error);
+      setLoadingError(getErrorMessage(error));
+      setLoading(false);
     }
+  };
 
+  const handleLoadingFailed = (error: string) => {
+    setLoadingError(error);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    if (!appReady) return; // الانتظار حتى اكتمال التحميل المحسن
+
+    const auth = enhancedFirebase.getAuth();
+    
     // Handle redirect result from Google Sign-In (important for WebView apps)
     getRedirectResult(auth)
       .then((result) => {
         if (result?.user) {
           console.log('Redirect sign-in successful:', result.user.email);
           setUser(result.user);
-          setLoading(false);
         }
       })
       .catch((error) => {
         console.error('Redirect sign-in error:', error);
-        setLoading(false);
       });
 
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
-      setLoading(false);
     });
     return () => unsubscribe();
-  }, []);
+  }, [appReady]);
 
   useEffect(() => {
     // All users can access all tabs now
   }, [activeTab, isAdmin, loading]);
 
   if (loading) {
+    return <EnhancedLoading onLoadingComplete={handleLoadingComplete} onLoadingFailed={handleLoadingFailed} />;
+  }
+
+  if (loadingError) {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center relative overflow-hidden">
-        {/* Background effects */}
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-indigo-600/20 rounded-full blur-[128px] pointer-events-none"></div>
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-violet-600/20 rounded-full blur-[128px] pointer-events-none"></div>
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-red-600/20 rounded-full blur-[128px] pointer-events-none"></div>
+        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-red-600/20 rounded-full blur-[128px] pointer-events-none"></div>
         
-        {/* Loading content */}
-        <div className="relative z-10 flex flex-col items-center gap-6">
-          <div className="w-16 h-16 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-2xl flex items-center justify-center shadow-2xl shadow-indigo-500/30 animate-pulse">
-            <Bot className="w-8 h-8 text-white" strokeWidth={2} />
+        <div className="relative z-10 flex flex-col items-center gap-6 max-w-md w-full px-6">
+          <div className="w-20 h-20 bg-gradient-to-br from-red-500 to-rose-600 rounded-2xl flex items-center justify-center shadow-2xl shadow-red-500/30">
+            <Bot className="w-10 h-10 text-white" strokeWidth={2} />
           </div>
-          <div className="flex flex-col items-center gap-2">
-            <h1 className="text-xl font-bold text-white">RuLearn</h1>
-            <div className="flex items-center gap-1">
-              <div className="w-2 h-2 bg-indigo-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-              <div className="w-2 h-2 bg-indigo-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-              <div className="w-2 h-2 bg-indigo-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
-            </div>
+          
+          <div className="text-center">
+            <h1 className="text-2xl font-bold text-white mb-2">فشل التحميل</h1>
+            <p className="text-slate-300 mb-4">{loadingError}</p>
+            
+            {requiresVPN({ message: loadingError }) && (
+              <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 mb-4">
+                <div className="flex items-center gap-2 text-blue-400 text-sm">
+                  <Shield className="w-4 h-4" />
+                  <span>قد تحتاج إلى تشغيل VPN للوصول إلى التطبيق في منطقتك</span>
+                </div>
+              </div>
+            )}
+            
+            <button
+              onClick={() => window.location.reload()}
+              className="bg-indigo-500 hover:bg-indigo-600 text-white px-6 py-3 rounded-lg flex items-center gap-2 transition-colors mx-auto"
+            >
+              إعادة تحميل الصفحة
+            </button>
           </div>
         </div>
       </div>
@@ -90,6 +128,8 @@ export default function App() {
   if (!user) {
     return <Login />;
   }
+
+  const auth = enhancedFirebase.getAuth();
 
   return (
     <div className="flex flex-col md:flex-row h-screen bg-slate-50 font-sans text-slate-900 overflow-hidden selection:bg-indigo-500/30">

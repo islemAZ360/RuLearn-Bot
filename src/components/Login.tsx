@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '../firebase';
+import { enhancedFirebase } from '../services/enhancedFirebase';
 import { Bot, Sparkles, Loader2, Mail, Lock, UserPlus, LogIn } from 'lucide-react';
 
 export default function Login() {
@@ -16,6 +16,7 @@ export default function Login() {
     setError(null);
 
     try {
+      const auth = enhancedFirebase.getAuth();
       if (isSignUp) {
         await createUserWithEmailAndPassword(auth, email, password);
       } else {
