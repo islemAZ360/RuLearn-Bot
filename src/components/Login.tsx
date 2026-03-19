@@ -1,34 +1,79 @@
-import React, { useState } from 'react';
-import { signInWithPopup, signInWithRedirect } from 'firebase/auth';
+import React, { useState, useEffect } from 'react';
+import { signInWithPopup } from 'firebase/auth';
 import { auth, googleProvider } from '../firebase';
-import { Bot, Sparkles, Loader2 } from 'lucide-react';
+import { Bot, Sparkles, Loader2, ExternalLink } from 'lucide-react';
+
+// Detect if running in WebView/in-app browser
+function isWebView(): boolean {
+  const userAgent = navigator.userAgent || navigator.vendor || (window as any).opera || '';
+  
+  // Check for common WebView indicators
+  const webviewIndicators = [
+    'FBAN', 'FBAV', // Facebook
+    'Instagram',
+    'Twitter',
+    'TelegramBot', 'Telegram', // Telegram
+    'Line',
+    'KAKAOTALK',
+    'Snapchat',
+    'WebView',
+    'wv', // Android WebView
+  ];
+  
+  for (const indicator of webviewIndicators) {
+    if (userAgent.includes(indicator)) {
+      return true;
+    }
+  }
+  
+  // Check for iOS WebView
+  const isIOS = /iPad|iPhone|iPod/.test(userAgent);
+  const isSafari = /Safari/.test(userAgent);
+  if (isIOS && !isSafari) {
+    return true;
+  }
+  
+  // Check if standalone (PWA) or has no window.open support
+  if ((window as any).navigator.standalone) {
+    return true;
+  }
+  
+  return false;
+}
 
 export default function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [inWebView, setInWebView] = useState(false);
+
+  useEffect(() => {
+    setInWebView(isWebView());
+  }, []);
+
+  const handleOpenInBrowser = () => {
+    const url = window.location.href;
+    // Try to open in external browser
+    window.open(url, '_system');
+    // Fallback: show instructions
+    setError('افتح الرابط في متصفح خارجي (Chrome/Safari) لتسجيل الدخول');
+  };
 
   const handleLogin = async () => {
     setLoading(true);
     setError(null);
     
     try {
-      // Try popup first (works better in WebView)
       await signInWithPopup(auth, googleProvider);
     } catch (popupError: any) {
-      console.log('Popup failed, trying redirect...', popupError);
+      console.error('Login failed:', popupError);
       
-      // If popup is blocked or fails, try redirect
       if (popupError.code === 'auth/popup-blocked' || 
           popupError.code === 'auth/popup-closed-by-user' ||
-          popupError.code === 'auth/cancelled-popup-request') {
-        try {
-          await signInWithRedirect(auth, googleProvider);
-        } catch (redirectError) {
-          console.error('Redirect also failed:', redirectError);
-          setError('فشل تسجيل الدخول. حاول مرة أخرى.');
-        }
+          popupError.code === 'auth/cancelled-popup-request' ||
+          popupError.message?.includes('storage')) {
+        setError('تسجيل الدخول غير مدعوم في هذا المتصفح. افتح التطبيق في متصفح خارجي.');
+        setInWebView(true);
       } else {
-        console.error('Login failed:', popupError);
         setError('فشل تسجيل الدخول. حاول مرة أخرى.');
       }
     } finally {
@@ -67,6 +112,17 @@ export default function Login() {
                 {error}
               </div>
             )}
+            
+            {inWebView && (
+              <button
+                onClick={handleOpenInBrowser}
+                className="w-full flex items-center justify-center gap-3 bg-indigo-600 text-white hover:bg-indigo-500 transition-all duration-300 py-4 px-6 rounded-2xl font-bold shadow-xl mb-4"
+              >
+                <ExternalLink className="w-5 h-5" />
+                فتح في متصفح خارجي
+              </button>
+            )}
+            
             <button
               onClick={handleLogin}
               disabled={loading}
