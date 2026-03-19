@@ -1,0 +1,12 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/ai/:match*",
+      "destination": "https://api.kiro.cheap/:match*"
+    },
+    {
+      "source": "/__/auth/:path*",
+      "destination": "https://n8n360-8ba3b.firebaseapp.com/__/auth/:path*"
+    }
+  ]
+}

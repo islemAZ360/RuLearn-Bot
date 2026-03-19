@@ -1,0 +1,5 @@
+{
+  "name": "RuLearn Bot Manager",
+  "description": "A Telegram bot manager and web interface for learning Russian, with AI translation and Firebase integration.",
+  "requestFramePermissions": []
+}

@@ -1,0 +1,61 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && 
+        (request.auth.token.email == "12azaiziaislam@gmail.com" && request.auth.token.email_verified == true);
+    }
+
+    // ===============================================================
+    // Data Validators
+    // ===============================================================
+    function isValidEntry(data) {
+      return data.ru is string && data.ru.size() > 0 && data.ru.size() < 5000 &&
+             data.ar is string && data.ar.size() > 0 && data.ar.size() < 5000 &&
+             data.userId == request.auth.uid &&
+             data.timestamp is number;
+    }
+
+    // ===============================================================
+    // Collection Rules
+    // ===============================================================
+
+    match /sentences/{docId} {
+      allow read, delete: if isOwner(resource.data.userId) || isAdmin();
+      allow create: if isAuthenticated() && isValidEntry(request.resource.data);
+      allow update: if isOwner(resource.data.userId) && isValidEntry(request.resource.data) && 
+                      request.resource.data.userId == resource.data.userId;
+    }
+
+    match /verbs/{docId} {
+      allow read, delete: if isOwner(resource.data.userId) || isAdmin();
+      allow create: if isAuthenticated() && isValidEntry(request.resource.data);
+      allow update: if isOwner(resource.data.userId) && isValidEntry(request.resource.data) && 
+                      request.resource.data.userId == resource.data.userId;
+    }
+
+    match /words/{docId} {
+      allow read, delete: if isOwner(resource.data.userId) || isAdmin();
+      allow create: if isAuthenticated() && isValidEntry(request.resource.data);
+      allow update: if isOwner(resource.data.userId) && isValidEntry(request.resource.data) && 
+                      request.resource.data.userId == resource.data.userId;
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,0 +1,90 @@
+{
+  "entities": {
+    "sentence": {
+      "title": "Sentence",
+      "description": "A translated sentence stored in the database.",
+      "type": "object",
+      "properties": {
+        "ru": {
+          "type": "string",
+          "description": "The Russian text."
+        },
+        "ar": {
+          "type": "string",
+          "description": "The Arabic translation."
+        },
+        "timestamp": {
+          "type": "number",
+          "description": "The time the sentence was saved."
+        },
+        "userId": {
+          "type": "string",
+          "description": "The ID of the user who saved the sentence."
+        }
+      },
+      "required": ["ru", "ar", "timestamp", "userId"]
+    },
+    "verb": {
+      "title": "Verb",
+      "description": "An extracted verb stored in the database.",
+      "type": "object",
+      "properties": {
+        "ru": {
+          "type": "string",
+          "description": "The Russian verb."
+        },
+        "ar": {
+          "type": "string",
+          "description": "The Arabic translation."
+        },
+        "timestamp": {
+          "type": "number",
+          "description": "The time the verb was saved."
+        },
+        "userId": {
+          "type": "string",
+          "description": "The ID of the user who saved the verb."
+        }
+      },
+      "required": ["ru", "ar", "timestamp", "userId"]
+    },
+    "word": {
+      "title": "Word",
+      "description": "An extracted word stored in the database.",
+      "type": "object",
+      "properties": {
+        "ru": {
+          "type": "string",
+          "description": "The Russian word."
+        },
+        "ar": {
+          "type": "string",
+          "description": "The Arabic translation."
+        },
+        "timestamp": {
+          "type": "number",
+          "description": "The time the word was saved."
+        },
+        "userId": {
+          "type": "string",
+          "description": "The ID of the user who saved the word."
+        }
+      },
+      "required": ["ru", "ar", "timestamp", "userId"]
+    }
+  },
+  "firestore": {
+    "/sentences/{sentenceId}": {
+      "schema": "sentence",
+      "description": "Collection of saved sentences."
+    },
+    "/verbs/{verbId}": {
+      "schema": "verb",
+      "description": "Collection of saved verbs."
+    },
+    "/words/{wordId}": {
+      "schema": "word",
+      "description": "Collection of saved words."
+    }
+  }
+}
