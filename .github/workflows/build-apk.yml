@@ -1,4 +1,4 @@
-name: Build Android APK
+name: Build Android Release
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
 
 jobs:
   build:
-    name: Build APK
+    name: Build Release APK & AAB
     runs-on: ubuntu-latest
 
     steps:
@@ -32,20 +32,41 @@ jobs:
           java-version: '21'
           distribution: 'zulu'
 
+      - name: Generate Keystore
+        run: |
+          keytool -genkeypair -v \
+            -keystore android/release-key.jks \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -alias rulearn-bot \
+            -storepass rulearn123 \
+            -keypass rulearn123 \
+            -dname "CN=RuLearn Bot, OU=Dev, O=RuLearn, L=Unknown, ST=Unknown, C=SA"
+
       - name: Add Android Platform
         run: npx cap add android || true
 
       - name: Sync Capacitor
         run: npx cap sync android
 
-      - name: Build Android APK
+      - name: Build Release APK
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug
+          ./gradlew assembleRelease
 
-      - name: Upload APK
+      - name: Build Release AAB
+        run: |
+          cd android
+          ./gradlew bundleRelease
+
+      - name: Upload Release APK
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: RuLearn-Bot-release-apk
+          path: android/app/build/outputs/apk/release/app-release.apk
+
+      - name: Upload Release AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: RuLearn-Bot-release-aab
+          path: android/app/build/outputs/bundle/release/app-release.aab
